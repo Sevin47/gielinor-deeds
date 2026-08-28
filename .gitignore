@@ -1,0 +1,13 @@
+build/
+.gradle/
+*.class
+node_modules/
+
+# An abandoned shared-world backend, kept locally for reference. It has its own
+# node_modules and contradicts the plugin's "nothing leaves your PC" promise, so
+# it stays out of the published repository.
+archive-multiplayer/
+
+# Design notes for partly-unbuilt ideas. Kept locally; out of the published
+# repository so a reviewer's attention stays on the plugin as it ships.
+FUTURE-GAMEMODE.md
