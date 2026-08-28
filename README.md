@@ -11,6 +11,8 @@ Wasteland -- and priced accordingly.
 **Nothing leaves your PC.** No account, no server, no network traffic of any
 kind. Your estate is saved in RuneLite's own settings on your computer.
 
+![The Estate tab, standing on an unbought Capital deed](docs/estate.png)
+
 ---
 
 ## Deed Locked
@@ -65,6 +67,12 @@ deed under your feet with the button to survey or buy it.
 large estate is a handful of rows rather than hundreds. Below that, the Deed Log
 tracks how much of each of the 18 kingdoms and 15 district types you have seen,
 and which of the 66 landmarks you have found.
+
+![The Deeds tab: holdings by kingdom, over progress across Gielinor](docs/deeds.png)
+
+## Settings
+
+<img src="docs/settings.png" alt="The plugin settings" width="232">
 
 ---
 
