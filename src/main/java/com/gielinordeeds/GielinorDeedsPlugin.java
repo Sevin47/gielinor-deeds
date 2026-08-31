@@ -26,6 +26,7 @@ import net.runelite.api.Tile;
 import net.runelite.api.MenuEntry;
 import net.runelite.api.WorldView;
 import net.runelite.api.Player;
+import net.runelite.api.Skill;
 import net.runelite.api.gameval.AnimationID;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.events.GameStateChanged;
@@ -70,6 +71,7 @@ public class GielinorDeedsPlugin extends Plugin
 	@Inject private OverlayManager overlayManager;
 	@Inject private ParcelOverlay parcelOverlay;
 	@Inject private DeedWorldMapOverlay worldMapOverlay;
+	@Inject private DeedMinimapOverlay minimapOverlay;
 	@Inject private VeilOverlay veilOverlay;
 	@Inject private ClientToolbar clientToolbar;
 	@Inject private Provider<GielinorDeedsPanel> panelProvider;
@@ -169,6 +171,7 @@ public class GielinorDeedsPlugin extends Plugin
 			grid.size(), deedLog.getBuyableTotal());
 		overlayManager.add(parcelOverlay);
 		overlayManager.add(worldMapOverlay);
+		overlayManager.add(minimapOverlay);
 		overlayManager.add(veilOverlay);
 
 		// Built after the grid loads: the panel reads it on construction to
@@ -190,6 +193,7 @@ public class GielinorDeedsPlugin extends Plugin
 		save();
 		overlayManager.remove(parcelOverlay);
 		overlayManager.remove(worldMapOverlay);
+		overlayManager.remove(minimapOverlay);
 		overlayManager.remove(veilOverlay);
 		if (veilRenderer != null)
 		{
@@ -331,7 +335,7 @@ public class GielinorDeedsPlugin extends Plugin
 		{
 			return;
 		}
-		SkillBaseline.Delta d = baseline.observe(event.getSkill(), event.getXp(), event.getLevel());
+		SkillBaseline.Delta d = baseline.observe(event.getSkill(), event.getXp());
 		if (d == null)
 		{
 			return;                       // first sighting: baseline only
@@ -625,6 +629,26 @@ public class GielinorDeedsPlugin extends Plugin
 		// Standing on your own land is a rule about ground, so ground and the
 		// things standing on it is as far as it needs to reach.
 		return null;
+	}
+
+	/**
+	 * Fill the XP baseline from the client's own totals.
+	 *
+	 * Cheap and idempotent: seed() only writes a skill it has not seen, so once
+	 * filled this does nothing. It exists because the baseline was filled only
+	 * by StatChanged events, so enabling the plugin mid-session left every
+	 * skill unseeded and swallowed the first gain in each one as a baseline.
+	 */
+	private void seedSkills()
+	{
+		if (baseline.isSeeded())
+		{
+			return;
+		}
+		for (Skill skill : Skill.values())
+		{
+			baseline.seed(skill, client.getSkillExperience(skill));
+		}
 	}
 
 	/** True when this action reaches ground the veil is covering. */
@@ -990,6 +1014,7 @@ public class GielinorDeedsPlugin extends Plugin
 			return;
 		}
 		loadFor(local.getName());
+		seedSkills();
 
 		WorldPoint wp = local.getWorldLocation();
 		currentParcel = grid.isSurveyable(wp) ? grid.at(wp) : null;

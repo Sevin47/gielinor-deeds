@@ -204,6 +204,20 @@ public interface GielinorDeedsConfig extends Config
 	}
 
 	@ConfigItem(
+		keyName = "showMinimapDeeds",
+		name = "Show deeds on the minimap",
+		description = "Mark the deeds you own on the minimap, in their district "
+			+ "colour, so you can tell at a glance whether you are on your own "
+			+ "land.",
+		section = displaySection,
+		position = 15
+	)
+	default boolean showMinimapDeeds()
+	{
+		return true;
+	}
+
+	@ConfigItem(
 		keyName = "showWorldMap",
 		name = "Show deeds on the world map",
 		description = "Draw your claimed parcels on the world map",

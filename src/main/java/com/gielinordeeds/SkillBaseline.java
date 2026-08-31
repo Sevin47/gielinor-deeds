@@ -8,6 +8,7 @@ package com.gielinordeeds;
 import java.util.EnumMap;
 import java.util.Map;
 import lombok.Value;
+import net.runelite.api.Experience;
 import net.runelite.api.Skill;
 
 /**
@@ -21,8 +22,11 @@ import net.runelite.api.Skill;
  *
  * So the first sighting of each skill only records a baseline and reports
  * nothing. Every sighting after that reports the difference. The baselines are
- * not persisted: they are rebuilt from the login burst each
- * session, which is both simpler and impossible to get wrong across a save.
+ * not persisted: they are rebuilt each session from the client's own totals,
+ * which is simpler and impossible to get wrong across a save.
+ *
+ * Levels are derived from the XP rather than read from the event. See
+ * {@link #levelFor}.
  */
 class SkillBaseline
 {
@@ -46,34 +50,62 @@ class SkillBaseline
 	}
 
 	private final Map<Skill, Integer> xp = new EnumMap<>(Skill.class);
-	private final Map<Skill, Integer> level = new EnumMap<>(Skill.class);
 
 	/** Forget everything. Called on login and logout, never mid-session. */
 	void reset()
 	{
 		xp.clear();
-		level.clear();
+	}
+
+	/**
+	 * Record a skill's total without reporting a gain.
+	 *
+	 * Lets the plugin fill the baseline from the client's own totals the moment
+	 * it has a logged-in player, rather than waiting for a StatChanged per
+	 * skill. Without that, enabling the plugin mid-session left every skill
+	 * unseeded, and the first gain in each was swallowed as a baseline -- so a
+	 * quest completing soon after paid nothing at all for the skills it
+	 * touched.
+	 */
+	void seed(Skill skill, int totalXp)
+	{
+		xp.putIfAbsent(skill, totalXp);
 	}
 
 	/**
 	 * @return what changed, or null on the first sighting of this skill
 	 */
-	Delta observe(Skill skill, int totalXp, int currentLevel)
+	Delta observe(Skill skill, int totalXp)
 	{
 		Integer prevXp = xp.put(skill, totalXp);
-		Integer prevLevel = level.put(skill, currentLevel);
-		if (prevXp == null || prevLevel == null)
+		if (prevXp == null)
 		{
 			return null;                     // baseline only
 		}
 		long gained = Math.max(0, (long) totalXp - prevXp);
 		// XP going backwards should never happen, but a dead-and-restored
 		// session or a client quirk must not produce a negative or a windfall.
-		if (gained == 0 && currentLevel <= prevLevel)
+		if (gained == 0)
 		{
 			return null;
 		}
-		return new Delta(gained, prevLevel, Math.max(prevLevel, currentLevel));
+		return new Delta(gained, levelFor(prevXp), levelFor(totalXp));
+	}
+
+	/**
+	 * The real level for a total, derived rather than reported.
+	 *
+	 * StatChanged carries a level alongside the XP, and trusting it cost
+	 * level-up charges: a reward that lands as one large lump can report the
+	 * old level with the new total, and the difference is where the charges
+	 * come from. Experience.getLevelForXp is the same function the client uses,
+	 * and it cannot disagree with the XP it was given.
+	 *
+	 * Clamped to 99, so virtual levels past it pay nothing.
+	 */
+	private static int levelFor(int totalXp)
+	{
+		return Math.min(Experience.MAX_REAL_LEVEL, Experience.getLevelForXp(totalXp));
 	}
 
 	boolean isSeeded()

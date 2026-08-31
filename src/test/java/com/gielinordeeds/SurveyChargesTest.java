@@ -5,10 +5,12 @@
  */
 package com.gielinordeeds;
 
+import net.runelite.api.Experience;
 import net.runelite.api.Skill;
 import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
@@ -134,16 +136,16 @@ public class SurveyChargesTest
 		// login. Treating that as a gain would hand a maxed account 200m XP of
 		// charges on login -- enough to survey the map several times over.
 		SkillBaseline b = new SkillBaseline();
-		assertNull(b.observe(Skill.ATTACK, 13_034_431, 99));
-		assertNull(b.observe(Skill.MINING, 200_000_000, 99));
+		assertNull(b.observe(Skill.ATTACK, 13_034_431));
+		assertNull(b.observe(Skill.MINING, 200_000_000));
 	}
 
 	@Test
 	public void laterSightingsReportOnlyTheDifference()
 	{
 		SkillBaseline b = new SkillBaseline();
-		b.observe(Skill.MINING, 100_000, 50);
-		SkillBaseline.Delta d = b.observe(Skill.MINING, 100_500, 50);
+		b.observe(Skill.MINING, 100_000);
+		SkillBaseline.Delta d = b.observe(Skill.MINING, 100_500);
 		assertEquals(500, d.getXpGained());
 		assertFalse(d.leveled());
 	}
@@ -151,24 +153,107 @@ public class SurveyChargesTest
 	@Test
 	public void everyLevelCrossedIsReported()
 	{
-		// A lamp or a big drop can cross several levels at once; each should pay.
+		// A lamp or a quest reward can cross several levels at once, and each
+		// one pays its own charge.
 		SkillBaseline b = new SkillBaseline();
-		b.observe(Skill.SLAYER, 1000, 10);
-		SkillBaseline.Delta d = b.observe(Skill.SLAYER, 50_000, 13);
+		b.observe(Skill.SLAYER, Experience.getXpForLevel(10));
+		SkillBaseline.Delta d = b.observe(Skill.SLAYER, Experience.getXpForLevel(13));
 		assertEquals(10, d.getFromLevel());
 		assertEquals(13, d.getToLevel());
 		assertTrue(d.leveled());
+	}
+
+	/**
+	 * A quest reward that crosses many levels at once pays for all of them.
+	 *
+	 * Waterfall Quest is the standard example: 13,750 Attack and Strength on an
+	 * account that may have none, taking a skill from 1 to 30 in one event.
+	 */
+	@Test
+	public void aQuestRewardPaysForEveryLevelItCrosses()
+	{
+		SkillBaseline b = new SkillBaseline();
+		b.observe(Skill.ATTACK, 0);
+		SkillBaseline.Delta d = b.observe(Skill.ATTACK, 13_750);
+
+		assertEquals(13_750, d.getXpGained());
+		assertEquals(1, d.getFromLevel());
+		assertEquals(Experience.getLevelForXp(13_750), d.getToLevel());
+		assertTrue("30 levels in one event should still be 30 levels",
+			d.getToLevel() - d.getFromLevel() > 20);
+	}
+
+	/**
+	 * The level is derived from the XP, never read from the event.
+	 *
+	 * StatChanged carries a level alongside the total, and a reward landing as
+	 * one lump can report the old level with the new XP. Trusting it lost every
+	 * level-up charge from that event, which is where quest rewards went.
+	 */
+	@Test
+	public void theLevelComesFromTheXpNotFromTheEvent()
+	{
+		SkillBaseline b = new SkillBaseline();
+		b.observe(Skill.COOKING, Experience.getXpForLevel(20));
+		SkillBaseline.Delta d = b.observe(Skill.COOKING, Experience.getXpForLevel(25));
+
+		assertEquals(20, d.getFromLevel());
+		assertEquals("the XP says 25, so the delta must say 25", 25, d.getToLevel());
+	}
+
+	/** Virtual levels past 99 pay nothing. */
+	@Test
+	public void levelsPastNinetyNineDoNotPay()
+	{
+		SkillBaseline b = new SkillBaseline();
+		b.observe(Skill.FISHING, 13_034_431);          // exactly 99
+		SkillBaseline.Delta d = b.observe(Skill.FISHING, 30_000_000);
+
+		assertEquals(99, d.getFromLevel());
+		assertEquals(99, d.getToLevel());
+		assertFalse("no more levels to cross", d.leveled());
+	}
+
+	/**
+	 * Seeding fills the baseline without paying, so no real gain is lost.
+	 *
+	 * The baseline used to be filled only by StatChanged, so enabling the
+	 * plugin mid-session left every skill unseeded and swallowed the first gain
+	 * in each one. A quest completing soon after paid nothing for the skills it
+	 * touched.
+	 */
+	@Test
+	public void seedingMeansTheFirstRealGainIsNotSwallowed()
+	{
+		SkillBaseline b = new SkillBaseline();
+		b.seed(Skill.WOODCUTTING, 5000);
+		assertTrue(b.isSeeded());
+
+		SkillBaseline.Delta d = b.observe(Skill.WOODCUTTING, 6000);
+		assertNotNull("a seeded skill must report its first real gain", d);
+		assertEquals(1000, d.getXpGained());
+	}
+
+	/** Seeding never overwrites a total already known. */
+	@Test
+	public void seedingDoesNotDisturbASkillAlreadyTracked()
+	{
+		SkillBaseline b = new SkillBaseline();
+		b.observe(Skill.MINING, 100_000);
+		b.seed(Skill.MINING, 0);
+		SkillBaseline.Delta d = b.observe(Skill.MINING, 100_500);
+		assertEquals("the seed must not have reset the total", 500, d.getXpGained());
 	}
 
 	@Test
 	public void aResetForgetsBaselinesSoTheNextLoginReseeds()
 	{
 		SkillBaseline b = new SkillBaseline();
-		b.observe(Skill.MINING, 100_000, 50);
+		b.observe(Skill.MINING, 100_000);
 		assertTrue(b.isSeeded());
 		b.reset();
 		assertFalse(b.isSeeded());
-		assertNull(b.observe(Skill.MINING, 100_000, 50));
+		assertNull(b.observe(Skill.MINING, 100_000));
 	}
 
 	/**
