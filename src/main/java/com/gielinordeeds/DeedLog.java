@@ -69,10 +69,10 @@ public class DeedLog
 		for (int i = 0; i < grid.size(); i++)
 		{
 			Parcel p = grid.atIndex(i);
-			// Unclaimable ground is excluded from every total. A kingdom that
-			// counted its own coastline could never be finished, which makes the
-			// percentage useless as a goal.
-			if (p == null || !p.isClaimable())
+			// Only land counts. A kingdom that counted its own coastline could
+			// never be finished, and open water -- buyable, but bought to cross
+			// rather than to hold -- outnumbers the land two and a half to one.
+			if (p == null || !p.isLand())
 			{
 				continue;
 			}
@@ -112,7 +112,7 @@ public class DeedLog
 		for (int i = set.nextSetBit(0); i >= 0; i = set.nextSetBit(i + 1))
 		{
 			Parcel p = grid.atIndex(i);
-			if (p == null || !p.isClaimable())
+			if (p == null || !p.isLand())
 			{
 				continue;
 			}

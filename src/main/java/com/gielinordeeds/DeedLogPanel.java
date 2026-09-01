@@ -125,7 +125,7 @@ class DeedLogPanel extends JPanel
 		long buyableTypes = 0;
 		for (Tier t : Tier.values())
 		{
-			if (t.isBuyable())
+			if (t.isLand())
 			{
 				buyableTypes++;
 			}
@@ -169,7 +169,7 @@ class DeedLogPanel extends JPanel
 		tiers.removeAll();
 		for (Tier t : Tier.values())
 		{
-			if (!t.isBuyable())
+			if (!t.isLand())
 			{
 				continue;
 			}

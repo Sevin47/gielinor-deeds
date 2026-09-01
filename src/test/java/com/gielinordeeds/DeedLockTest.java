@@ -432,4 +432,120 @@ public class DeedLockTest
 	{
 		return new WorldPoint(wp.getX(), wp.getY(), plane);
 	}
+	// ---------------------------------------------------------------------
+	// Open water: buyable so a run can cross to an island, but not land.
+	// ---------------------------------------------------------------------
+
+	@Test
+	public void openWaterCanBeBoughtButPaysNothing()
+	{
+		assertTrue("water has to be buyable, or islands are unreachable",
+			Tier.WATER.isBuyable());
+		assertFalse("and it must not be land", Tier.WATER.isLand());
+		assertEquals("a sea crossing is a cost, not an investment",
+			0.0, Tier.WATER.rpsFor(50), 1e-9);
+	}
+
+	/**
+	 * Water is excluded from the map there is to finish.
+	 *
+	 * There are 75,072 water parcels against 29,766 of land. Counting them
+	 * would make the Deed Log a percentage of the ocean.
+	 */
+	@Test
+	public void openWaterDoesNotCountTowardFinishingTheMap()
+	{
+		int land = 0, water = 0;
+		for (int i = 0; i < grid.size(); i++)
+		{
+			Parcel p = grid.atIndex(i);
+			if (p == null)
+			{
+				continue;
+			}
+			if (p.getTier() == Tier.WATER)
+			{
+				water++;
+				assertTrue("water should be claimable", p.isClaimable());
+				assertFalse("but never land", p.isLand());
+			}
+			else if (p.isLand())
+			{
+				land++;
+			}
+		}
+		assertTrue("expected a lot of water", water > land);
+		assertEquals("the Deed Log counts land only", land,
+			new DeedLog(grid).getBuyableTotal());
+	}
+
+	/**
+	 * A run never begins on water.
+	 *
+	 * The opening deed is the only thing paying rent at minute zero. Granted a
+	 * water deed, an account would have no income at all and could never afford
+	 * a second one.
+	 */
+	@Test
+	public void aRunNeverBeginsOnWater()
+	{
+		Parcel sea = null;
+		for (int i = 0; i < grid.size() && sea == null; i++)
+		{
+			Parcel p = grid.atIndex(i);
+			if (p == null || p.getTier() != Tier.WATER)
+			{
+				continue;
+			}
+			boolean allSea = true;
+			for (int dx = -1; dx <= 1; dx++)
+			{
+				for (int dy = -1; dy <= 1; dy++)
+				{
+					Parcel q = grid.at(p.getPx() + dx, p.getPy() + dy);
+					allSea &= q == null || !q.isLand();
+				}
+			}
+			if (allSea)
+			{
+				sea = p;
+			}
+		}
+		assertNotNull("expected some open sea on the map", sea);
+
+		Estate e = new Estate();
+		assertEquals("no land in reach, so no run begins", 0,
+			DeedLock.grantStart(grid, e, sea));
+		assertEquals(0, e.surveyedCount());
+		assertTrue("but it still begins on land", DeedLock.grantStart(grid, e,
+			somewhereClaimable()) > 0);
+	}
+
+	/** Water can be surveyed and bought like anything else on the frontier. */
+	@Test
+	public void aRunCanBridgeAcrossWater()
+	{
+		Parcel start = somewhereClaimable();
+		Parcel sea = null;
+		for (int i = 0; i < grid.size() && sea == null; i++)
+		{
+			Parcel p = grid.atIndex(i);
+			if (p != null && p.getTier() == Tier.WATER)
+			{
+				sea = p;
+			}
+		}
+		assertNotNull(sea);
+
+		Estate e = new Estate();
+		DeedLock.grantStart(grid, e, start);
+		// Put the estate next door to the water, then check it can be crossed.
+		e.markSurveyed(grid.indexOf(grid.at(sea.getPx() - 1, sea.getPy())));
+		e.getOwned().put(grid.at(sea.getPx() - 1, sea.getPy()).getPid(), 1);
+
+		assertTrue("water on the frontier must be surveyable",
+			DeedLock.onFrontier(grid, e, sea));
+		assertTrue("and buyable once surveyed", sea.isClaimable());
+		assertEquals("without ever paying rent", 0.0, sea.rps(), 1e-9);
+	}
 }

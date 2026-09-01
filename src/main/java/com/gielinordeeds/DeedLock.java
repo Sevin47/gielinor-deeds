@@ -121,10 +121,9 @@ public final class DeedLock
 	 * and then stop: nothing further out touches anything of yours, so the map
 	 * goes no further until you buy.
 	 *
-	 * The deed given is the one you are standing on, or the nearest claimable
-	 * one if you are on water or a landmark that cannot be owned. If nothing in
-	 * reach is claimable nothing is granted at all, so the run begins properly
-	 * once you stand somewhere it can.
+	 * The deed given is the one you are standing on, or the nearest land if you
+	 * are on water. If there is no land in reach nothing is granted at all, so
+	 * the run begins properly once you stand somewhere it can.
 	 *
 	 * Returns 1 when a run begins here, or 0 if the estate already holds
 	 * ground, which is what stops it re-firing every time the plugin loads.
@@ -138,7 +137,7 @@ public final class DeedLock
 
 		// Found before anything is written, so a start with nowhere to stand
 		// leaves the estate untouched rather than half-begun.
-		Parcel deed = nearestClaimable(grid, here, null);
+		Parcel deed = nearestLand(grid, here, null);
 		if (deed == null)
 		{
 			return 0;
@@ -151,7 +150,7 @@ public final class DeedLock
 	}
 
 	/**
-	 * The closest claimable deed to {@code from} that the estate has not seen.
+	 * The closest land deed to {@code from} that the estate has not seen.
 	 *
 	 * Pass a null estate to ignore what has been surveyed, which is how the
 	 * very first deed is chosen. Ties break on scan order, which spreads the
@@ -160,7 +159,7 @@ public final class DeedLock
 	 * and are visited before any diagonal.
 	 */
 	@Nullable
-	private static Parcel nearestClaimable(ParcelGrid grid, Parcel from,
+	private static Parcel nearestLand(ParcelGrid grid, Parcel from,
 		@Nullable Estate estate)
 	{
 		Parcel best = null;
@@ -171,7 +170,10 @@ public final class DeedLock
 			{
 				Parcel q = grid.at(from.getPx() + dx, from.getPy() + dy);
 				int idx = grid.indexOf(q);
-				if (q == null || idx < 0 || !q.isClaimable())
+				// Land, not merely claimable. Open water is buyable now, and a
+				// run granted a water deed would own something paying no rent,
+				// so it could never afford a second one.
+				if (q == null || idx < 0 || !q.isLand())
 				{
 					continue;
 				}

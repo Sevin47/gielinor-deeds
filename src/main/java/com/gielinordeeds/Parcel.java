@@ -38,6 +38,12 @@ public class Parcel
 		return landmark != null || tier.isBuyable();
 	}
 
+	/** Claimable ground that pays rent. Open water is claimable but not land. */
+	public boolean isLand()
+	{
+		return landmark != null || tier.isLand();
+	}
+
 	public boolean isLandmark()
 	{
 		return landmark != null;

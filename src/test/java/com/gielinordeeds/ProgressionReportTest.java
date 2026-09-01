@@ -236,7 +236,7 @@ public class ProgressionReportTest
 				continue;
 			}
 			Parcel q = grid.atIndex(i);
-			if (q != null && q.isClaimable() && !estate.owns(q.getPid()))
+			if (q != null && q.isLand() && !estate.owns(q.getPid()))
 			{
 				forSale.add(q);
 			}
@@ -306,7 +306,7 @@ public class ProgressionReportTest
 				estate.markSurveyed(grid.indexOf(best));
 				frontier.remove(grid.indexOf(best));
 				out.surveyed++;
-				if (best.isClaimable())
+				if (best.isLand())
 				{
 					forSale.add(best);
 				}

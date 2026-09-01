@@ -56,7 +56,19 @@ public enum Tier
 	 * look wrong to anyone who knows where the Wilderness actually is.
 	 */
 	WASTELAND("Wasteland", 40, 0.0148, 0x6A5046, true),
-	WATER("Open water", 50, 0.0090, 0x4A7FA5, false),
+	/*
+	 * Open water is buyable and pays nothing.
+	 *
+	 * It is bought to cross, not to hold: the Wizard Tower, the causeways and
+	 * every island need a chain of water deeds before there is anything on the
+	 * far side to survey. Without that, a run can be walled in by a river it
+	 * can see across but never reach.
+	 *
+	 * Rent stays at zero so a sea crossing is a cost rather than an investment,
+	 * and isLand() keeps all 75,072 of these out of the Deed Log -- counting
+	 * them would make finishing the map a percentage of the ocean.
+	 */
+	WATER("Open water", 50, 0.0, 0x4A7FA5, true),
 	OFFMAP("Unsurveyed", 0, 0.0, 0x2A2E38, false);
 
 	private static final Tier[] BY_CODE = values();
@@ -85,5 +97,17 @@ public enum Tier
 	public double rpsFor(int parcelPrice)
 	{
 		return basePrice == 0 ? 0.0 : baseRps * ((double) parcelPrice / basePrice);
+	}
+
+	/**
+	 * True when this district is dry land: rentable, and part of the map to
+	 * finish.
+	 *
+	 * Open water is buyable but is neither. Everything that counts progress or
+	 * looks for somewhere to live off asks this rather than isBuyable.
+	 */
+	public boolean isLand()
+	{
+		return buyable && baseRps > 0;
 	}
 }
