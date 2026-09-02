@@ -7,6 +7,7 @@ package com.gielinordeeds;
 
 import java.util.EnumMap;
 import java.util.Map;
+import java.util.function.ToIntFunction;
 import lombok.Value;
 import net.runelite.api.Experience;
 import net.runelite.api.Skill;
@@ -70,6 +71,47 @@ class SkillBaseline
 	void seed(Skill skill, int totalXp)
 	{
 		xp.putIfAbsent(skill, totalXp);
+	}
+
+	/**
+	 * Fill the whole baseline from a snapshot of the client's totals, or refuse.
+	 *
+	 * The snapshot is only real once the server has sent the stats, and after a
+	 * login or a hop it has not. Until then every skill reads zero, and seeding
+	 * from that is worse than not seeding at all: the baseline says the account
+	 * has never trained, so the stat packet landing a moment later reads as the
+	 * whole of it being earned at once. The XP half of that is held by the
+	 * hourly cap, but level-ups bypass the cap by design, so it pays a charge
+	 * for every level from 1 upward in every skill -- a couple of hundred
+	 * charges for simply logging in.
+	 *
+	 * Hitpoints is the tell. Every account is created at level 10 with 1,154
+	 * Hitpoints XP and no account can go below it, so a zero there is the
+	 * client not knowing yet rather than a skill that has never been trained.
+	 *
+	 * All or nothing: a partial baseline reports itself as seeded, which would
+	 * leave the missing skills to be filled by the stat packet -- correctly, as
+	 * it happens, but only by luck of ordering. Refusing outright leaves the
+	 * StatChanged events to do the seeding, which is the safe path anyway
+	 * because those carry real totals by definition.
+	 *
+	 * @return true once the baseline holds something, seeded now or before
+	 */
+	boolean seedAll(ToIntFunction<Skill> totals)
+	{
+		if (isSeeded())
+		{
+			return true;
+		}
+		if (totals.applyAsInt(Skill.HITPOINTS) <= 0)
+		{
+			return false;                    // the stats have not arrived yet
+		}
+		for (Skill skill : Skill.values())
+		{
+			seed(skill, totals.applyAsInt(skill));
+		}
+		return true;
 	}
 
 	/**

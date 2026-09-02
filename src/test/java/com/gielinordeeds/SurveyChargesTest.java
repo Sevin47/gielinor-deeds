@@ -256,6 +256,78 @@ public class SurveyChargesTest
 		assertNull(b.observe(Skill.MINING, 100_000));
 	}
 
+	// ── logging in ───────────────────────────────────────────────────────
+	//
+	// The 600ms schedule reaches a fresh login before the stats do: the game
+	// state is LOGGED_IN and the player is named while every skill still reads
+	// zero. Seeding from that snapshot said the account had never trained, so
+	// the stat packet a moment later read as the whole of it being earned at
+	// once -- and level rewards bypass the hourly cap, so it paid a charge for
+	// every level from 1 upward in every skill.
+	//
+	// Reported against a total level of about 183, which minted 168 charges in
+	// the first second of a session that had ended the night before with none.
+
+	/** All zeroes is the client not knowing yet, and must not be recorded. */
+	@Test
+	public void aLoginBeforeTheStatsArriveIsNotASnapshot()
+	{
+		SkillBaseline b = new SkillBaseline();
+		assertFalse("an empty client must not seed a baseline",
+			b.seedAll(skill -> 0));
+		assertFalse("nothing may be recorded from it", b.isSeeded());
+	}
+
+	/** Once the stats land, the same call seeds every skill. */
+	@Test
+	public void theStatsArrivingSeedsTheWholeBaseline()
+	{
+		SkillBaseline b = new SkillBaseline();
+		assertTrue(b.seedAll(skill -> skill == Skill.HITPOINTS ? 1154 : 13_363));
+		assertTrue(b.isSeeded());
+		assertNull("a seeded skill reports no gain until it actually gains",
+			b.observe(Skill.MINING, 13_363));
+		assertEquals(100, b.observe(Skill.MINING, 13_463).getXpGained());
+	}
+
+	/**
+	 * The whole sequence, end to end: log in early, let the stats land, and
+	 * come out the other side owing nothing.
+	 */
+	@Test
+	public void loggingInPaysNothingHoweverEarlyTheTickLands()
+	{
+		SkillBaseline b = new SkillBaseline();
+		SurveyCharges c = new SurveyCharges();
+		long now = 1_000_000L;
+
+		// The schedule beats the stat packet. Refused, so nothing is recorded.
+		b.seedAll(skill -> 0);
+
+		// The stat packet, one StatChanged per skill, every one a first
+		// sighting. A level 60 in all of them is 566 charges of level rewards
+		// if any of this is mistaken for a gain.
+		int paid = 0;
+		for (Skill skill : Skill.values())
+		{
+			SkillBaseline.Delta d = b.observe(skill, 273_742);
+			if (d == null)
+			{
+				continue;
+			}
+			paid += c.addXp(d.getXpGained(), now, 5000, Balance.CHARGES_PER_HOUR);
+			for (int lvl = d.getFromLevel() + 1; lvl <= d.getToLevel(); lvl++)
+			{
+				paid += c.addLevel(lvl);
+			}
+		}
+
+		assertEquals("logging in must not pay", 0, paid);
+		assertEquals(0, c.getCharges());
+		assertEquals("and must not spend the hourly allowance either",
+			Balance.CHARGES_PER_HOUR, c.allowanceRemaining(now, Balance.CHARGES_PER_HOUR));
+	}
+
 	/**
 	 * The complaint this pricing exists for: at a flat 5,000 a new account
 	 * earning 8k XP an hour saw 1.6 charges, while anything past level 50 sat

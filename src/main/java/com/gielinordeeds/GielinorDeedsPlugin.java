@@ -26,7 +26,6 @@ import net.runelite.api.Tile;
 import net.runelite.api.MenuEntry;
 import net.runelite.api.WorldView;
 import net.runelite.api.Player;
-import net.runelite.api.Skill;
 import net.runelite.api.gameval.AnimationID;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.events.GameStateChanged;
@@ -634,21 +633,19 @@ public class GielinorDeedsPlugin extends Plugin
 	/**
 	 * Fill the XP baseline from the client's own totals.
 	 *
-	 * Cheap and idempotent: seed() only writes a skill it has not seen, so once
-	 * filled this does nothing. It exists because the baseline was filled only
-	 * by StatChanged events, so enabling the plugin mid-session left every
-	 * skill unseeded and swallowed the first gain in each one as a baseline.
+	 * Cheap and idempotent: once filled this does nothing. It exists because
+	 * the baseline was filled only by StatChanged events, so enabling the
+	 * plugin mid-session left every skill unseeded and swallowed the first gain
+	 * in each one as a baseline.
+	 *
+	 * Called from the 600ms schedule, which reaches a fresh login before the
+	 * stats do -- the game state is LOGGED_IN and the player is named while
+	 * every skill still reads zero. SkillBaseline.seedAll refuses that snapshot
+	 * rather than recording it; see the note there for what it used to cost.
 	 */
 	private void seedSkills()
 	{
-		if (baseline.isSeeded())
-		{
-			return;
-		}
-		for (Skill skill : Skill.values())
-		{
-			baseline.seed(skill, client.getSkillExperience(skill));
-		}
+		baseline.seedAll(client::getSkillExperience);
 	}
 
 	/** True when this action reaches ground the veil is covering. */
